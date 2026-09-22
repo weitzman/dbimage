@@ -1,4 +1,4 @@
 type: drupal11
 docroot: web
-dbimage: ghcr.io/weitzman/dbimage/database:2026-09-22
+dbimage: ghcr.io/weitzman/dbimage/database:latest
 ddev_version_constraint: ">= v1.25.4"
