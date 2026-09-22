@@ -50,15 +50,12 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # Replace this step with whatever produces a gzipped SQL dump of your
-      # production database at .github/database-ddev/dump.sql.gz.
+      # production database at .github/database-ddev/dump.sql.gz. Here it is
+      # the dump.sql.gz asset attached to the repo's most recent release.
       - name: Get DB dump
-        run: |
-          curl -OL https://github.com/acquia/cli/releases/latest/download/acli.phar
-          chmod +x acli.phar
-          sudo mv acli.phar /usr/local/bin/acli
-          acli -n auth:login --key="${{ secrets.ACQUIA_API_KEY }}" --secret="${{ secrets.ACQUIA_API_SECRET }}"
-          db_dump=$(acli pull:db ${{ github.event.repository.name }}.prod default --no-interaction --no-import | tail -2l | xargs |  sed 's/^.* //')
-          mv ${db_dump} .github/database-ddev/dump.sql.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --pattern dump.sql.gz --dir .github/database-ddev
 
       - uses: docker/setup-buildx-action@v4
 
