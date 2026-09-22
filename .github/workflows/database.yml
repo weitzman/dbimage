@@ -94,7 +94,7 @@ jobs:
       - name: Delete older tagged database images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          account: ${{ github.repository_owner }}
+          account: ${{ github.event.repository.owner.type == 'User' && 'user' || github.repository_owner }}
           # A personal access token with delete:packages; GITHUB_TOKEN cannot
           # delete organization packages.
           token: ${{ secrets.GHCR_DELETE_TOKEN }}
