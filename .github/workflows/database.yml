@@ -1,0 +1,114 @@
+name: Build and publish a database image
+
+on:
+  # Run manually in the GA UI on your branch when ad hoc builds are needed.
+  workflow_dispatch:
+  schedule:
+    - cron: '35 7 * * *'
+
+# Optional repository Actions variables (Settings > Secrets and variables >
+# Actions > Variables):
+#   DB_BUILD_RUNNER  runner label; a large runner speeds up the import.
+#   DB_BASE_IMAGE    DDEV db image to build on; match the `db` row of
+#                    `ddev version` used by your team.
+#
+# The image is published to ghcr.io/<owner>/<repo>/database. A run on the
+# default branch tags it :latest and with today's date; any other ref tags
+# it with the sanitized branch name only, so ad hoc builds can't clobber
+# :latest.
+#
+# The Dockerfile's builder stage produces base_db.zst (plain,
+# architecture-independent data) natively on this one runner, and the
+# final stage is pure COPY/metadata per platform, so a single buildx
+# invocation covers both architectures with no emulation.
+#
+# No GHA build cache: the dump changes every run, so the expensive layer
+# never hits, while exporting it would upload multi-GB blobs into the
+# repo's 10 GB Actions-cache quota.
+jobs:
+  build:
+    runs-on: ${{ vars.DB_BUILD_RUNNER || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute image tags
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/database"
+          if [ "$GITHUB_REF_NAME" = "${{ github.event.repository.default_branch }}" ]; then
+            tags="${image}:latest
+          ${image}:$(date +'%Y-%m-%d')"
+          else
+            tags="${image}:$(echo "$GITHUB_REF_NAME" | sed 's/[^a-zA-Z0-9._-]/-/g')"
+          fi
+          {
+            echo "TAGS<<TAGS_EOF"
+            echo "$tags"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_ENV"
+
+      # Replace this step with whatever produces a gzipped SQL dump of your
+      # production database at .github/database-ddev/dump.sql.gz.
+      - name: Get DB dump
+        run: |
+          curl -OL https://github.com/acquia/cli/releases/latest/download/acli.phar
+          chmod +x acli.phar
+          sudo mv acli.phar /usr/local/bin/acli
+          acli -n auth:login --key="${{ secrets.ACQUIA_API_KEY }}" --secret="${{ secrets.ACQUIA_API_SECRET }}"
+          db_dump=$(acli pull:db ${{ github.event.repository.name }}.prod default --no-interaction --no-import | tail -2l | xargs |  sed 's/^.* //')
+          mv ${db_dump} .github/database-ddev/dump.sql.gz
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .github/database-ddev
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.TAGS }}
+          build-args: |
+            BASE_IMAGE=${{ vars.DB_BASE_IMAGE || 'ddev/ddev-dbserver-mysql-8.0:v1.25.4' }}
+          # Both false to prevent an unknown/unknown arch being reported by GHCR.
+          provenance: false
+          sbom: false
+          # `labels` reach each per-platform image; `annotations` reach the
+          # multi-arch index, which is what GHCR's package page reads.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=DDEV database image preloaded with ${{ github.event.repository.name }} production data
+          annotations: |
+            index:org.opencontainers.image.description=DDEV database image preloaded with ${{ github.event.repository.name }} production data
+
+  cleanup:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete older tagged database images
+        uses: snok/container-retention-policy@v3.0.1
+        with:
+          account: ${{ github.repository_owner }}
+          # A personal access token with delete:packages; GITHUB_TOKEN cannot
+          # delete organization packages.
+          token: ${{ secrets.GHCR_DELETE_TOKEN }}
+          image-names: ${{ github.event.repository.name }}/database
+          tag-selection: tagged
+          keep-n-most-recent: 30
+          cut-off: 1h
+        # NOTE: Do not add a `tag-selection: untagged` cleanup step here. The
+        # multi-arch push leaves the per-architecture child manifests
+        # intentionally untagged, referenced only by the tagged manifest
+        # list. snok/container-retention-policy has no manifest-list
+        # awareness, so an untagged sweep deletes those children, leaving
+        # tags pointing at missing content ("manifest not found" on pull).
+        # The tagged step above already bounds growth of meaningful versions.
