@@ -1,0 +1,42 @@
+# Core Composer dependencies
+# ----------------------------------------------------------------------------
+/vendor/
+/web/core/
+/web/modules/contrib/
+/web/themes/contrib/
+/web/profiles/contrib/
+/web/libraries/
+
+# Drupal core scaffold files (if you prefer not to track them)
+# ----------------------------------------------------------------------------
+/web/autoload.php
+/web/index.php
+/web/update.php
+/web/robots.txt
+/web/web.config
+
+# User-uploaded files and site-generated content
+# ----------------------------------------------------------------------------
+/web/sites/*/files/
+/web/sites/*/private/
+/web/sites/*/translations/
+/web/sites/*/tmp/
+/web/sites/*/cache/
+
+# Sensitive configuration files (Database credentials & local overrides)
+# ----------------------------------------------------------------------------
+/web/sites/*/settings.local.php
+/web/sites/*/services.local.yml
+.env
+*.sql
+*.sql.gz
+
+# Development and IDE specific files
+# ----------------------------------------------------------------------------
+/.idea/
+/.vscode/
+/*.geolocation
+.DS_Store
+Thumbs.db
+node_modules/
+npm-debug.log
