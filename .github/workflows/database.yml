@@ -73,7 +73,7 @@ jobs:
           push: true
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_IMAGE=${{ vars.DB_BASE_IMAGE || 'ddev/ddev-dbserver-mysql-8.0:v1.25.4' }}
+            BASE_IMAGE=${{ vars.DB_BASE_IMAGE || 'ddev/ddev-dbserver-mariadb-11.8:v1.25.4' }}
           # Both false to prevent an unknown/unknown arch being reported by GHCR.
           provenance: false
           sbom: false

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Bakes a production database dump into DDEV's stock MySQL server image.
+# Bakes a production database dump into DDEV's stock database server image.
 #
 # The build imports the dump and writes /mysqlbase/custom/base_db.zst —
 # the seed location DDEV reserves for derived images, which its entrypoint
@@ -24,7 +24,7 @@
 # from any other tag. database.yml overrides this via --build-arg from
 # the DB_BASE_IMAGE Actions variable; keep its fallback in sync with the
 # default below.
-ARG BASE_IMAGE=ddev/ddev-dbserver-mysql-8.0:v1.25.4
+ARG BASE_IMAGE=ddev/ddev-dbserver-mariadb-11.8:v1.25.4
 
 FROM --platform=$BUILDPLATFORM ${BASE_IMAGE} AS builder
 
@@ -33,14 +33,16 @@ set -eux -o pipefail
 socket=/var/tmp/mysql.sock
 
 # Restore the stock base database into the (empty) datadir, mirroring the
-# restore /docker-entrypoint.sh performs on first boot (hardcoding the
-# xtrabackup/zstd toolchain the mysql-8.0 base ships, where the entrypoint
-# auto-detects it).
+# restore /docker-entrypoint.sh performs on first boot, including its
+# choice of backup tool (MySQL bases ship xtrabackup, MariaDB mariabackup).
+backup=mariabackup
+stream=mbstream
+if command -v xtrabackup >/dev/null; then backup=xtrabackup; stream=xbstream; fi
 mkdir -p /var/tmp/base_db
 cd /var/tmp/base_db
-zstdmt -dc --quiet /mysqlbase/base_db.zst | xbstream -x
-xtrabackup --prepare --skip-innodb-use-native-aio --target-dir=/var/tmp/base_db
-xtrabackup --datadir=/var/lib/mysql --copy-back --skip-innodb-use-native-aio --target-dir=/var/tmp/base_db
+zstdmt -dc --quiet /mysqlbase/base_db.zst | "${stream}" -x
+"${backup}" --prepare --skip-innodb-use-native-aio --target-dir=/var/tmp/base_db
+"${backup}" --datadir=/var/lib/mysql --copy-back --skip-innodb-use-native-aio --target-dir=/var/tmp/base_db
 
 # Start a build-time server (socket only) and wait for it; the post-loop
 # ping is the timeout backstop.
@@ -60,7 +62,7 @@ gunzip -c /tmp/dump.sql.gz | mysql -uroot -proot --socket="${socket}" db
 # the starter archive (zstd-compressed xbstream), to the derived-image
 # seed path the entrypoint prefers over the stock /mysqlbase/base_db.zst.
 mkdir -p /mysqlbase/custom
-xtrabackup --backup --stream=xbstream --user=root --password=root --socket="${socket}" | zstdmt --quiet > /mysqlbase/custom/base_db.zst
+"${backup}" --backup --stream="${stream}" --user=root --password=root --socket="${socket}" | zstdmt --quiet > /mysqlbase/custom/base_db.zst
 
 mysqladmin shutdown -uroot -proot --socket="${socket}"
 wait "${pid}"
@@ -76,8 +78,8 @@ COPY --from=builder /mysqlbase/custom/base_db.zst /mysqlbase/custom/base_db.zst
 # No USER is declared: DDEV builds a derived image on top of this one and
 # runs groupadd/useradd in it without switching to root first, so a
 # non-root USER here breaks `ddev start`. mysqld still must not run as
-# root — DDEV's compose sets the host user's uid explicitly, and the GHA
-# service containers pass `--user mysql` (see pr.yml/deploy.yml).
+# root: DDEV's compose sets the host user's uid explicitly, and other
+# consumers (e.g. GHA service containers) should pass `--user mysql`.
 
 # The inherited healthcheck tolerates only ~30s of initialization before
 # reporting unhealthy. Restoring the production data on first start takes
