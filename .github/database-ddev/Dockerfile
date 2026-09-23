@@ -59,7 +59,7 @@ mysqladmin ping -uroot -proot --socket="${socket}"
 gunzip -c /tmp/dump.sql.gz | mysql -uroot -proot --socket="${socket}" db
 
 # Write a base backup containing the imported data, in the same format as
-# the starter archive (zstd-compressed xbstream), to the derived-image
+# the starter archive (zstd-compressed backup stream), to the derived-image
 # seed path the entrypoint prefers over the stock /mysqlbase/base_db.zst.
 mkdir -p /mysqlbase/custom
 "${backup}" --backup --stream="${stream}" --user=root --password=root --socket="${socket}" | zstdmt --quiet > /mysqlbase/custom/base_db.zst
@@ -77,8 +77,8 @@ COPY --from=builder /mysqlbase/custom/base_db.zst /mysqlbase/custom/base_db.zst
 
 # No USER is declared: DDEV builds a derived image on top of this one and
 # runs groupadd/useradd in it without switching to root first, so a
-# non-root USER here breaks `ddev start`. mysqld still must not run as
-# root: DDEV's compose sets the host user's uid explicitly, and other
+# non-root USER here breaks `ddev start`. The server still refuses to run
+# as root: DDEV's compose sets the host user's uid explicitly, and other
 # consumers (e.g. GHA service containers) should pass `--user mysql`.
 
 # The inherited healthcheck tolerates only ~30s of initialization before
