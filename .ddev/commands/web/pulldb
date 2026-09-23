@@ -7,7 +7,8 @@
 set -eu -o pipefail
 
 tag=${1:-latest}
-image="ghcr.io/montefiore-einstein/metrialsvc/database:${tag}"
+# Replace with own image
+image="ghcr.io/weitzman/dbimage/database:${tag}"
 config="${DDEV_APPROOT}/.ddev/config.yaml"
 
 docker pull "${image}"
