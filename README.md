@@ -4,7 +4,7 @@ A demonstration of a DDEV DB image with data baked in. This is great for sites t
   - The [DB image](https://github.com/weitzman/dbimage/pkgs/container/dbimage%2Fdatabase), hosted by Github Container Registry. Uses same access control as the repo.
   - [Github Actions workflow](.github/workflows/database.yml)
   - [Dockerfile](.github/database-ddev/Dockerfile)
-- Convenience commands for developers: [pulldb](.ddev/commands/web/pulldb), [resetdb](.ddev/commands/web/resetdb)
+- Convenience commands for developers: [pulldb](.ddev/commands/host/pulldb), [resetdb](.ddev/commands/host/resetdb)
 - DDEV config that uses the built image: [config.yaml](.ddev/config.yaml)
 
 Note that the [database.yml](.github/workflows/database.yml) in this repo fetches its DB dump from a Github release. A real site would fetch it from its hosting provider, S3, etc.
